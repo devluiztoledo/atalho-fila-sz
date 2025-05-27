@@ -18,7 +18,7 @@ Este repositório contém um **script para Tampermonkey** que adiciona um atalho
 
 ## ⚙️ O que o script faz?
 
-Adiciona um botão intercomunicador entre o SZ e o TOOLVGL
+Adiciona um botão intercomunicador entre o SZ e o TOOLSVGL
 
 ---
 

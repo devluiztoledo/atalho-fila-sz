@@ -3,7 +3,7 @@
 1. Instale a extensão [Tampermonkey](https://www.tampermonkey.net/) no seu navegador.
 2. Clique no botão abaixo para instalar diretamente:
 
-👉 **[Instalar Script](https://raw.githubusercontent.com/devluiztoledo/atalho-fila-sz/main/atalho-fila-sz)**
+👉 **[Instalar Script](https://raw.githubusercontent.com/devluiztoledo/atalho-fila-sz/main/atalho-fila-sz.user.js)**
 
 
 

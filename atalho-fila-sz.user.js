@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         A8 BOTÃO FILA SZ - Luiz Toledo
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Cria um botão que interage com a fila SZ
+// @version      2.0
+// @description  Cria botões "Entrar na fila", "Passar a vez" e "Sair da fila" no chat SZ, sincronizando com a página da fila.
 // @author       Luiz Toledo
 // @match        https://ggnet.sz.chat/user/agent*
-// @match        http*://toolsvgl.gegnet.com.br/fila*
+// @match        https://clusterscpr.sz.chat/user/agent*
+// @match        https://*.sz.com.br/fila*
 // @updateURL    https://raw.githubusercontent.com/devluiztoledo/atalho-fila-sz/main/atalho-fila-sz.user.js
 // @downloadURL  https://raw.githubusercontent.com/devluiztoledo/atalho-fila-sz/main/atalho-fila-sz.user.js
 // @icon         https://raw.githubusercontent.com/devluiztoledo/atalho-fila-sz/main/icon.png
@@ -18,121 +19,99 @@
 (function () {
   'use strict';
 
+  const signalKeys = {
+    entrar: 'sinalEntrarFila',
+    passar: 'sinalPassarVez',
+    sair:   'sinalSairFila'
+  };
   const host = location.host;
 
+  // ===== CHAT: injeta botões =====
+  if (host.endsWith('sz.chat')) {
+    // evita múltipla injeção
+    if (document.querySelector('#btn-entrar-sz')) return;
 
-  if (host === 'ggnet.sz.chat') {
-    if (document.querySelector('#btn-passar-vez-sz')) return;
-
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((mutations, obs) => {
       const agentDiv = document.querySelector('.agentAcorrdion');
+      if (!agentDiv) return;
 
-      if (agentDiv && !document.querySelector('#btn-passar-vez-sz')) {
-        const container = document.createElement('div');
-        container.style.position = 'absolute';
-        container.style.top = '10px';
-        container.style.right = '10px';
-        container.style.zIndex = '10';
-        container.style.display = 'flex';
-        container.style.flexDirection = 'column';
-        container.style.alignItems = 'flex-end';
-        container.style.gap = '4px';
+      // container absoluto alinhado à direita
+      const container = document.createElement('div');
+      container.style.cssText = [
+        'position: absolute',
+        'top: 10px',
+        'right: 10px',
+        'z-index: 9999',
+        'display: flex',
+        'flex-direction: column',
+        'gap: 4px'
+      ].join(';');
 
-        const btnWidth = '100px';
+      const btnWidth = '120px';
+      function makeBtn(id, label, iconClass, bgClass, signalKey) {
+        const btn = document.createElement('button');
+        btn.id = id;
+        btn.innerHTML = `<i class="${iconClass}"></i> ${label}`;
+        btn.className = `btn shadow ${bgClass}`;
+        btn.style.width = btnWidth;
+        btn.addEventListener('click', () => GM_setValue(signalKey, Date.now()));
 
-        function makeBtn(id, text, bg, signalKey) {
-          const btn = document.createElement('button');
-          btn.id = id;
-          btn.textContent = text;
-          btn.style.padding = '4px 0';
-          btn.style.width = btnWidth;
-          btn.style.fontSize = '12px';
-          btn.style.lineHeight = '1.2';
-          btn.style.background = bg;
-          btn.style.color = '#fff';
-          btn.style.border = 'none';
-          btn.style.borderRadius = '3px';
-          btn.style.cursor = 'pointer';
-          btn.style.boxShadow = '0 1px 4px rgba(0,0,0,0.2)';
-
-          let blinkInterval;
-          if (signalKey === 'sinalPassarVez') {
-
-            GM_addValueChangeListener(signalKey, (_k, _o, _n, remote) => {
-              if (remote && !blinkInterval) {
-                let visible = true;
-                blinkInterval = setInterval(() => {
-                  btn.style.visibility = visible ? 'hidden' : 'visible';
-                  visible = !visible;
-                }, 500);
-              }
-            });
-
-
-            btn.addEventListener('click', () => {
-              clearInterval(blinkInterval);
-              btn.style.visibility = 'visible';
-            });
-          }
-
-          btn.addEventListener('click', () => {
-            GM_setValue(signalKey, Date.now());
-            console.log(`🟢 sinal enviado: ${signalKey}`);
+        // piscar se for passar vez
+        if (signalKey === signalKeys.passar) {
+          let blink;
+          GM_addValueChangeListener(signalKey, (_k, _old, _new, remote) => {
+            if (remote) {
+              blink = setInterval(() => {
+                btn.style.visibility = btn.style.visibility === 'hidden' ? 'visible' : 'hidden';
+              }, 500);
+            }
           });
-
-          return btn;
+          btn.addEventListener('click', () => {
+            clearInterval(blink);
+            btn.style.visibility = 'visible';
+          });
         }
 
-        container.appendChild(makeBtn('btn-passar-vez-sz', 'Passar a vez', '#ffc107', 'sinalPassarVez'));
-        container.appendChild(makeBtn('btn-entrar-fila-sz', 'Entrar na fila', '#007bff', 'sinalEntrarFila'));
-        container.appendChild(makeBtn('btn-sair-fila-sz', 'Sair da fila', '#dc3545', 'sinalSairFila'));
-
-        agentDiv.style.position = 'relative';
-        agentDiv.appendChild(container);
-        observer.disconnect();
+        return btn;
       }
+
+      container.append(
+        makeBtn('btn-passsz', 'Passar a vez', 'bi bi-arrow-right', 'btn-outline-warning', signalKeys.passar),
+        makeBtn('btn-entrsz', 'Entrar na fila', 'bi bi-person-plus', 'btn-outline-primary', signalKeys.entrar),
+        makeBtn('btn-sairsz', 'Sair da fila', 'bi bi-box-arrow-left', 'btn-outline-danger', signalKeys.sair)
+      );
+
+      agentDiv.style.position = 'relative';
+      agentDiv.append(container);
+      obs.disconnect();
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
     return;
   }
 
-
-  function waitAndClick(selector, description) {
+  // ===== FILA: processa sinais =====
+  function waitClick(selector) {
     const interval = setInterval(() => {
       const btn = document.querySelector(selector);
       if (btn && !btn.disabled) {
         btn.click();
-        console.log(`▶️ ${description} clicado.`);
         clearInterval(interval);
       }
-    }, 1000);
+    }, 500);
   }
 
-  function clickNow(selector, description) {
-    const btn = document.querySelector(selector);
-    if (btn) {
-      btn.click();
-      console.log(`▶️ ${description} clicado.`);
-    } else {
-      console.warn(`⚠️ ${description} não encontrado (${selector}).`);
-    }
-  }
+  // entrada
+  GM_addValueChangeListener(signalKeys.entrar, (_k, _o, _n, remote) => {
+    if (remote) waitClick('#entrarFila');
+  });
+  // passar vez
+  GM_addValueChangeListener(signalKeys.passar, (_k, _o, _n, remote) => {
+    if (remote) waitClick('#passarVez');
+  });
+  // sair
+  GM_addValueChangeListener(signalKeys.sair, (_k, _o, _n, remote) => {
+    if (remote) waitClick('#sairFila');
+  });
 
-  if (GM_getValue('sinalEntrarFila', 0))
-    waitAndClick('#entrarFila', 'Entrar na fila');
-  if (GM_getValue('sinalSairFila', 0))
-    clickNow('#sairFila', 'Sair da fila');
-  if (GM_getValue('sinalPassarVez', 0))
-    waitAndClick('#passarVez', 'Passar a vez');
-
-  GM_addValueChangeListener('sinalEntrarFila', (_k, _o, _n, remote) => {
-    if (remote) waitAndClick('#entrarFila', 'Entrar na fila');
-  });
-  GM_addValueChangeListener('sinalSairFila', (_k, _o, _n, remote) => {
-    if (remote) clickNow('#sairFila', 'Sair da fila');
-  });
-  GM_addValueChangeListener('sinalPassarVez', (_k, _o, _n, remote) => {
-    if (remote) waitAndClick('#passarVez', 'Passar a vez');
-  });
 })();
